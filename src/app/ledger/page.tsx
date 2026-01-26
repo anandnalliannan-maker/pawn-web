@@ -1,11 +1,10 @@
-// src/app/ledger/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 
 type LedgerDirection = 'DEBIT' | 'CREDIT';
-type LedgerSource = 'CUSTOMER_LOAN' | 'CUSTOMER_PAYMENT' | 'DEPOSIT_RECEIVE' | 'DEPOSIT_PAYMENT' | 'MANUAL';
+type LedgerSource = 'CUSTOMER_LOAN' | 'CUSTOMER_PAYMENT' | 'DEPOSIT_RECEIVE' | 'DEPOSIT_PAYMENT' | 'MANUAL' | 'VOUCHER';
 
 type LedgerCategory = 'LOAN' | 'INTEREST' | 'PRINCIPAL' | 'DEPOSIT' | 'EXPENSE' | 'INCOME' | 'OTHER';
 
@@ -130,6 +129,8 @@ function sourceLabel(s: LedgerSource): string {
       return 'Deposit Paid';
     case 'MANUAL':
       return 'Manual';
+    case 'VOUCHER':
+      return 'Voucher';
     default:
       return s;
   }
@@ -187,17 +188,6 @@ export default function LedgerPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
-  // manual entry modal
-  const [showManual, setShowManual] = useState(false);
-  const [mDate, setMDate] = useState<string>(todayIso());
-  const [mDirection, setMDirection] = useState<LedgerDirection>('DEBIT');
-  const [mCategory, setMCategory] = useState<LedgerCategory>('EXPENSE');
-  const [mAmount, setMAmount] = useState<string>('');
-  const [mRef, setMRef] = useState<string>('');
-  const [mNote, setMNote] = useState<string>('');
-  const [saving, setSaving] = useState(false);
-  const [mErr, setMErr] = useState('');
-
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
     if (from) p.set('from', from);
@@ -252,45 +242,6 @@ export default function LedgerPage() {
     return map;
   }, [rows]);
 
-  const openManual = () => {
-    setMErr('');
-    setMDate(todayIso());
-    setMDirection('DEBIT');
-    setMCategory('EXPENSE');
-    setMAmount('');
-    setMRef('');
-    setMNote('');
-    setShowManual(true);
-  };
-
-  const saveManual = async () => {
-    setMErr('');
-    const amt = Math.max(0, Math.trunc(Number(mAmount) || 0));
-    if (!mDate) return setMErr('Date is required.');
-    if (!amt) return setMErr('Amount is required.');
-    setSaving(true);
-    try {
-      await apiFetch(`ledger/manual`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: mDate,
-          direction: mDirection,
-          category: mCategory,
-          amount: amt,
-          refNo: mRef.trim() ? mRef.trim() : null,
-          note: mNote.trim() ? mNote.trim() : null,
-        }),
-      });
-      setShowManual(false);
-      await load();
-    } catch (e: any) {
-      setMErr(e?.message || 'Failed to save manual entry.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const categoryRows = useMemo(() => {
     const order: LedgerCategory[] = ['LOAN', 'PRINCIPAL', 'INTEREST', 'DEPOSIT', 'INCOME', 'EXPENSE', 'OTHER'];
     const keys = Object.keys(groupedTotals) as LedgerCategory[];
@@ -311,17 +262,12 @@ export default function LedgerPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <div>
           <h1 style={h1}>Ledger</h1>
-          <div style={sub}>
-            Auto entries come from Loans / Payments / Deposits. Manual entry is only for miscellaneous company income/expense.
-          </div>
+          <div style={sub}>Auto entries come from Loans / Payments / Deposits / Vouchers. Manual entry is disabled.</div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button type="button" style={btnLight} onClick={load} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button type="button" style={btnDark} onClick={openManual}>
-            + Manual Entry
           </button>
         </div>
       </div>
@@ -346,7 +292,8 @@ export default function LedgerPage() {
               <option value="CUSTOMER_PAYMENT">Customer Payment</option>
               <option value="DEPOSIT_RECEIVE">Deposit Receive</option>
               <option value="DEPOSIT_PAYMENT">Deposit Payment</option>
-              <option value="MANUAL">Manual</option>
+              <option value="VOUCHER">Voucher</option>
+              <option value="MANUAL">Manual (legacy)</option>
             </select>
           </div>
 
@@ -533,113 +480,9 @@ export default function LedgerPage() {
           </div>
         )}
       </section>
-
-      {/* Manual entry modal */}
-      {showManual && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: 560,
-              background: '#fff',
-              borderRadius: 20,
-              boxShadow: '0 20px 25px -5px rgba(15,23,42,0.3)',
-              padding: 18,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 900 }}>Manual Ledger Entry</div>
-              <button
-                type="button"
-                onClick={() => setShowManual(false)}
-                style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer' }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Date</div>
-                <input type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} style={input} />
-              </div>
-
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Direction</div>
-                <select value={mDirection} onChange={(e) => setMDirection(e.target.value as LedgerDirection)} style={input}>
-                  <option value="DEBIT">OUT (Debit)</option>
-                  <option value="CREDIT">IN (Credit)</option>
-                </select>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Category</div>
-                <select value={mCategory} onChange={(e) => setMCategory(e.target.value as LedgerCategory)} style={input}>
-                  <option value="EXPENSE">Expense</option>
-                  <option value="INCOME">Income</option>
-                  <option value="OTHER">Other</option>
-                  <option value="DEPOSIT">Deposit</option>
-                  <option value="INTEREST">Interest</option>
-                  <option value="PRINCIPAL">Principal</option>
-                  <option value="LOAN">Loan</option>
-                </select>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Amount</div>
-                <input
-                  type="number"
-                  value={mAmount}
-                  onChange={(e) => setMAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  style={input}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Ref No (optional)</div>
-              <input
-                value={mRef}
-                onChange={(e) => setMRef(e.target.value)}
-                placeholder="Bill no / UPI ref / etc"
-                style={input}
-              />
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', marginBottom: 6 }}>Note (optional)</div>
-              <input value={mNote} onChange={(e) => setMNote(e.target.value)} placeholder="Reason / description…" style={input} />
-            </div>
-
-            {mErr && (
-              <div style={{ marginTop: 10, padding: 10, borderRadius: 12, background: '#fef2f2', color: '#b91c1c' }}>
-                {mErr}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-              <button type="button" style={btnLight} onClick={() => setShowManual(false)} disabled={saving}>
-                Cancel
-              </button>
-              <button type="button" style={{ ...btnDark, opacity: saving ? 0.7 : 1 }} onClick={saveManual} disabled={saving}>
-                {saving ? 'Saving…' : 'Save Entry'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
+
+
+

@@ -3,44 +3,63 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch, setToken, clearCompanyId } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!username.trim() || !password.trim()) {
+    const u = username.trim();
+    const p = password.trim();
+
+    if (!u || !p) {
       setError('Please enter both username and password.');
       return;
     }
 
     setSubmitting(true);
 
-    // Demo / static credentials for now
-    const isValid = username === 'admin' && password === 'admin';
+    try {
+      const resp = await apiFetch<{ ok: boolean; token?: string; message?: string }>('auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: u, password: p }),
+      });
 
-    if (!isValid) {
+      if (!resp?.ok || !resp?.token) {
+        setError(resp?.message || 'Login failed.');
+        setSubmitting(false);
+        return;
+      }
+
+      setToken(resp.token);
+
+      // ✅ Important: force staff to choose company after login
+      // Clear any previous selection so they don't accidentally use old company
+      clearCompanyId();
+
+      router.push('/company');
+    } catch (err: any) {
+      setError(err?.message || 'Login failed.');
       setSubmitting(false);
-      setError('Invalid username or password.');
       return;
     }
 
-    // No localStorage / token, just navigate once
-    router.push('/');
+    setSubmitting(false);
   };
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: '#020617', // very dark background
+        background: '#020617',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -50,7 +69,7 @@ export default function LoginPage() {
       <div
         style={{
           width: '100%',
-          maxWidth: 400,
+          maxWidth: 420,
           background: '#020617',
           borderRadius: 16,
           border: '1px solid #1f2937',
@@ -60,26 +79,31 @@ export default function LoginPage() {
         }}
       >
         <div style={{ marginBottom: 22, textAlign: 'center' }}>
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              marginBottom: 4,
-              letterSpacing: 0.4,
-            }}
-          >
+          <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, letterSpacing: 0.4 }}>
             Pawn Finance – Web
           </div>
-          <div style={{ fontSize: 13, color: '#9ca3af' }}>
-            Sign in to access the control panel
-          </div>
+          <div style={{ fontSize: 13, color: '#9ca3af' }}>Sign in to access the control panel</div>
         </div>
+
+        {error ? (
+          <div
+            style={{
+              marginBottom: 14,
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.35)',
+              color: '#fecaca',
+              padding: '10px 12px',
+              borderRadius: 10,
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>
-              Username
-            </label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>Username</label>
             <input
               type="text"
               value={username}
@@ -99,10 +123,8 @@ export default function LoginPage() {
             />
           </div>
 
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>
-              Password
-            </label>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>Password</label>
             <input
               type="password"
               value={password}
@@ -122,25 +144,6 @@ export default function LoginPage() {
             />
           </div>
 
-          <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-            Demo credentials: <span style={{ fontWeight: 600 }}>admin / admin</span>
-          </div>
-
-          {error && (
-            <div
-              style={{
-                background: '#7f1d1d',
-                color: '#fee2e2',
-                fontSize: 12,
-                padding: '6px 10px',
-                borderRadius: 8,
-                marginBottom: 12,
-              }}
-            >
-              {error}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={submitting}
@@ -149,17 +152,20 @@ export default function LoginPage() {
               height: 42,
               borderRadius: 999,
               border: 'none',
-              background: submitting ? '#4b5563' : '#4f46e5',
-              color: '#f9fafb',
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: submitting ? 'default' : 'pointer',
-              marginTop: 4,
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              background: submitting ? '#334155' : '#4f46e5',
+              color: '#fff',
+              fontWeight: 700,
+              marginTop: 8,
             }}
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
+
+        <div style={{ marginTop: 14, fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+          (Current demo login: admin / admin)
+        </div>
       </div>
     </div>
   );

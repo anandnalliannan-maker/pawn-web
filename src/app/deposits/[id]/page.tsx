@@ -22,6 +22,7 @@ type PaymentRow = {
 
 type DepositDto = {
   id: string;
+  companyName?: string | null;
   financier: { name: string; phone: string; referenceNo: string };
   deposit: {
     startDate: string;
@@ -209,6 +210,10 @@ export default function DepositDetailsPage() {
               <div>
                 <div style={label}>Financier</div>
                 <div style={value}>{data.financier.name}</div>
+              </div>
+              <div>
+                <div style={label}>Company</div>
+                <div style={value}>{data.companyName || '-'}</div>
               </div>
               <div>
                 <div style={label}>Phone</div>

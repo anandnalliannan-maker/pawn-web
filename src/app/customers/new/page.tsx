@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '../../../lib/api';
+import { apiFetch, getCompanyName } from '../../../lib/api';
 
 // ---------- Types ----------
 type LoanType = 'Document' | 'Gold' | 'Silver';
@@ -43,6 +43,8 @@ type CustomerPayload = {
   jewels: JewelRow[];
   photoDataUrl?: string;
 };
+
+type CompanyOption = { id: string; name: string };
 
 // ✅ Scheme types (from /schemes page localStorage)
 type InterestRow = {
@@ -204,11 +206,11 @@ export default function NewCustomerPage() {
   const [dob, setDob] = useState('');
 
   // ---- loan ----
-  const [companyList, setCompanyList] = useState<string[]>([]);
-  const [company, setCompany] = useState('');
+  const [companyList, setCompanyList] = useState<CompanyOption[]>([]);
+  const [company, setCompany] = useState(() => getCompanyName() || '');
 
   // ✅ Schemes for dropdown
-  const [schemeList, setSchemeList] = useState<InterestScheme[]>([]);
+  const schemeList = useMemo(() => loadSchemesFromStorage(), []);
   const [scheme, setScheme] = useState<string>(SCHEME_NONE_VALUE); // default = None
 
   const [loanType, setLoanType] = useState<LoanType>('Document');
@@ -271,17 +273,11 @@ export default function NewCustomerPage() {
     setMonthlyPct(Number.isFinite(yp) ? String(yp / 12) : '');
   };
 
-  // ✅ Load schemes from localStorage
-  useEffect(() => {
-    const list = loadSchemesFromStorage();
-    setSchemeList(list);
-  }, []);
+  const handleSchemeChange = (value: string) => {
+    setScheme(value);
+    if (value === SCHEME_NONE_VALUE) return;
 
-  // ✅ Auto-fill Monthly Interest % when a scheme is selected (except None)
-  useEffect(() => {
-    if (scheme === SCHEME_NONE_VALUE) return;
-
-    const s = schemeList.find((x) => x.name === scheme);
+    const s = schemeList.find((x) => x.name === value);
     if (!s) return;
 
     const pct = getDefaultMonthlyPctFromScheme(s);
@@ -289,15 +285,31 @@ export default function NewCustomerPage() {
 
     // auto fill monthly + yearly
     onMonthlyChange(String(pct));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheme, schemeList]);
+  };
+
+  const normalizeCompanies = (list: unknown): CompanyOption[] => {
+    if (!Array.isArray(list)) return [];
+    if (list.length === 0) return [];
+
+    if (typeof list[0] === 'string') {
+      return (list as string[]).map((name) => ({ id: name, name }));
+    }
+
+    return (list as Array<{ id?: string; name?: string }>).
+      map((c) => ({
+        id: typeof c.id === 'string' ? c.id : typeof c.name === 'string' ? c.name : '',
+        name: typeof c.name === 'string' ? c.name : '',
+      }))
+      .filter((c) => c.id && c.name);
+  };
 
   // Load companies (optional, ignore failure)
   useEffect(() => {
     (async () => {
       try {
-        const list = await apiFetch<string[]>('companies');
-        if (Array.isArray(list) && list.length) setCompanyList(list);
+        const list = await apiFetch<CompanyOption[] | string[]>('companies');
+        const normalized = normalizeCompanies(list);
+        if (normalized.length) setCompanyList(normalized);
       } catch {
         // ignore
       }
@@ -606,8 +618,8 @@ export default function NewCustomerPage() {
             <select style={compactSelect} value={company} onChange={(e) => setCompany(e.target.value)}>
               <option value="">Select company</option>
               {companyList.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+                <option key={c.id} value={c.name}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -616,7 +628,7 @@ export default function NewCustomerPage() {
           {/* ✅ Scheme dropdown (includes None) */}
           <label>
             <div style={labelCss}>Scheme</div>
-            <select style={compactSelect} value={scheme} onChange={(e) => setScheme(e.target.value)}>
+            <select style={compactSelect} value={scheme} onChange={(e) => handleSchemeChange(e.target.value)}>
               <option value={SCHEME_NONE_VALUE}>None (manual)</option>
               {schemeList.map((s) => (
                 <option key={s.id} value={s.name}>
@@ -913,4 +925,3 @@ export default function NewCustomerPage() {
     </main>
   );
 }
-

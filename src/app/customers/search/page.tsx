@@ -157,6 +157,8 @@ export default function SearchExistingCustomerPage() {
 
   // Filtered list in memory
   const filtered = useMemo(() => {
+    // trigger recompute when Search is clicked
+    void filterVersion;
     const acc = accNo.trim().toLowerCase();
     const nm = name.trim().toLowerCase();
     const ph = phone.trim().toLowerCase();

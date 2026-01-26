@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getCompanyId, getCompanyName } from '@/lib/api';
 
 const wrap: React.CSSProperties = { maxWidth: 860, margin: '0 auto', padding: '18px 16px 26px' };
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16 };
@@ -38,6 +38,9 @@ function todayIso(): string {
 
 export default function NewDepositPage() {
   const router = useRouter();
+
+  const companyName = getCompanyName();
+  const companyId = getCompanyId();
 
   const [financierName, setFinancierName] = useState('');
   const [phone, setPhone] = useState('');
@@ -106,6 +109,11 @@ export default function NewDepositPage() {
 
       <section style={card}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={label}>Company (selected)</div>
+            <input style={input} value={companyName || companyId || '-'} readOnly />
+          </div>
+
           <div style={{ gridColumn: '1 / -1' }}>
             <div style={label}>Financier name</div>
             <input style={input} value={financierName} onChange={(e) => setFinancierName(e.target.value)} />

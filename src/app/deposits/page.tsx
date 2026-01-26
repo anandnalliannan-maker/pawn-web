@@ -9,6 +9,7 @@ type DepositStatus = 'ACTIVE' | 'CLOSED';
 type DepositListRow = {
   id: string;
   financierName: string;
+  companyName?: string | null;
   phone?: string | null;
   referenceNo?: string | null;
   startDate: string; // YYYY-MM-DD or ISO
@@ -146,6 +147,7 @@ export default function DepositsListPage() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #e5e7eb' }}>Financier</th>
+                <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #e5e7eb' }}>Company</th>
                 <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #e5e7eb' }}>Phone</th>
                 <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #e5e7eb' }}>Ref</th>
                 <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #e5e7eb' }}>Start</th>
@@ -158,7 +160,7 @@ export default function DepositsListPage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 14, color: '#6b7280' }}>
+                  <td colSpan={9} style={{ padding: 14, color: '#6b7280' }}>
                     No deposits found.
                   </td>
                 </tr>
@@ -170,6 +172,7 @@ export default function DepositsListPage() {
                     onClick={() => router.push(`/deposits/${encodeURIComponent(r.id)}`)}
                   >
                     <td style={{ padding: 12, borderBottom: '1px solid #f3f4f6', fontWeight: 700 }}>{r.financierName}</td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #f3f4f6' }}>{r.companyName || '-'}</td>
                     <td style={{ padding: 12, borderBottom: '1px solid #f3f4f6' }}>{r.phone || '-'}</td>
                     <td style={{ padding: 12, borderBottom: '1px solid #f3f4f6' }}>{r.referenceNo || '-'}</td>
                     <td style={{ padding: 12, borderBottom: '1px solid #f3f4f6' }}>{fmtDate(r.startDate)}</td>
