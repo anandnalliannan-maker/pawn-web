@@ -79,6 +79,11 @@ type CustomerRecord = {
     interestTo?: string | null;
     interestAdj?: number;
   }>;
+
+  status?: 'ACTIVE' | 'CLOSED';
+  closedAt?: string | null;
+  closedBy?: string | null;
+  closeNote?: string | null;
 };
 
 const pageWrap: React.CSSProperties = {
@@ -449,14 +454,30 @@ export default function CustomerDetailsPage() {
                 <div style={value}>₹ {fmtCurrency(n(safeLoan.originalLoanAmount ?? safeLoan.loanAmount))}</div>
               </div>
 
+              
+
               <div>
                 <div style={label}>Outstanding loan amount</div>
                 <div style={value}>₹ {fmtCurrency(effectivePrincipal)}</div>
               </div>
 
+              
+
               <div>
                 <div style={label}>Pending interest</div>
                 <div style={value}>₹ {fmtCurrency(pendingInterest)}</div>
+              </div>
+
+              
+
+              <div>
+                <div style={label}>Status</div>
+                <div style={value}>{record.status || 'ACTIVE'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Closed at</div>
+                <div style={value}>{record.closedAt || '-'}</div>
               </div>
 
               <div>
@@ -474,6 +495,13 @@ export default function CustomerDetailsPage() {
               <div style={label}>Remarks</div>
               <div style={{ ...value, whiteSpace: 'pre-wrap' }}>{safeLoan.remarks || '-'}</div>
             </div>
+
+            {record.closeNote ? (
+              <div style={{ marginTop: 10 }}>
+                <div style={label}>Close note</div>
+                <div style={{ ...value, whiteSpace: 'pre-wrap' }}>{record.closeNote}</div>
+              </div>
+            ) : null}
           </section>
 
           {/* Payment history */}
@@ -483,6 +511,7 @@ export default function CustomerDetailsPage() {
               <button
                 type="button"
                 onClick={handleOpenPaymentModal}
+                disabled={record.status === 'CLOSED'}
                 style={{
                   padding: '8px 14px',
                   borderRadius: 999,
@@ -491,10 +520,11 @@ export default function CustomerDetailsPage() {
                   color: '#ffffff',
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: record.status === 'CLOSED' ? 'not-allowed' : 'pointer',
+                  opacity: record.status === 'CLOSED' ? 0.6 : 1,
                 }}
               >
-                Make Payment
+                {record.status === 'CLOSED' ? 'Loan Closed' : 'Make Payment'}
               </button>
             </div>
 
@@ -745,3 +775,14 @@ export default function CustomerDetailsPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
