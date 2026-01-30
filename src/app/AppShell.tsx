@@ -250,17 +250,6 @@ export default function AppShell({ children }: Props) {
           </button>
 
           <div style={navSectionTitle}>LOANS</div>
-          <button
-            type="button"
-            onClick={() => router.push('/close-loan')}
-            style={{
-              ...navBtn(pathname.startsWith('/close-loan')),
-              background: pathname.startsWith('/close-loan') ? 'rgba(239,68,68,0.18)' : 'transparent',
-              color: pathname.startsWith('/close-loan') ? '#fecaca' : '#9ca3af',
-            }}
-          >
-            Close Loan
-          </button>
         </nav>
 
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>

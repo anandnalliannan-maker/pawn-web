@@ -1,4 +1,4 @@
-// src/app/customers/[accNo]/page.tsx
+﻿// src/app/customers/[accNo]/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -16,7 +16,7 @@ type JewelRow = {
   assetId: number;
 };
 
-// ✅ Backend Payment row (single row can carry both interest + principal)
+// Backend Payment row (single row can carry both interest + principal)
 type PaymentRow = {
   id: string;
   date: string; // backend should return YYYY-MM-DD
@@ -33,7 +33,16 @@ type PaymentRow = {
   interestAdj?: number;
 };
 
-// ✅ Customer record from backend
+type HistoryRow = {
+  id?: string;
+  createdAt: string;
+  action: string;
+  summary: string;
+  changedBy?: string | null;
+  data?: any;
+};
+
+// Customer record from backend
 type CustomerRecord = {
   accNo: string;
   date: string;
@@ -175,7 +184,7 @@ function todayIso(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ✅ Convert backend DTO -> UI PaymentRow
+// Convert backend DTO -> UI PaymentRow
 function mapBackendPaymentsToUi(data: CustomerRecord, loanAmountFallback: number): PaymentRow[] {
   const rows = Array.isArray(data.payments) ? data.payments : [];
 
@@ -230,6 +239,45 @@ export default function CustomerDetailsPage() {
   const [paymentError, setPaymentError] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeDate, setCloseDate] = useState<string>(todayIso());
+  const [closeNote, setCloseNote] = useState<string>('');
+  const [closeConfirmPrincipal, setCloseConfirmPrincipal] = useState(false);
+  const [closeConfirmInterest, setCloseConfirmInterest] = useState(false);
+  const [closeError, setCloseError] = useState<string>('');
+  const [closeSaving, setCloseSaving] = useState(false);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editArea, setEditArea] = useState('');
+  const [editRelative, setEditRelative] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editPhone2, setEditPhone2] = useState('');
+  const [editAadhar, setEditAadhar] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+
+  const loadHistory = React.useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const data = await apiFetch<HistoryRow[]>(`customers/${encodeURIComponent(accNoParam)}/history`);
+      setHistoryRows(Array.isArray(data) ? data : []);
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || 'Failed to load customer history.';
+      setHistoryError(msg);
+      setHistoryRows([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [accNoParam]);
+
   // Load single customer using backend /customers/:accNo
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +313,10 @@ export default function CustomerDetailsPage() {
     };
   }, [accNoParam]);
 
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
   const safeLoan = useMemo(
     () =>
       record && record.loan
@@ -286,21 +338,21 @@ export default function CustomerDetailsPage() {
     [record],
   );
 
-  // ✅ Effective principal: from last payment outstandingPrincipal; else from loan.loanAmount
+  // Effective principal: from last payment outstandingPrincipal; else from loan.loanAmount
   const effectivePrincipal = useMemo(() => {
     if (!record) return 0;
     if (payments.length > 0) return n(payments[payments.length - 1].outstandingPrincipal);
     return n(safeLoan.loanAmount);
   }, [payments, record, safeLoan.loanAmount]);
 
-  // ✅ Pending interest: from last payment pendingInterest; else from loan.pendingInterest
+  // Pending interest: from last payment pendingInterest; else from loan.pendingInterest
   const pendingInterest = useMemo(() => {
     if (!record) return 0;
     if (payments.length > 0) return n(payments[payments.length - 1].pendingInterest);
     return n(safeLoan.pendingInterest ?? 0);
   }, [payments, record, safeLoan.pendingInterest]);
 
-  // ✅ Display-only monthly interest (do NOT use this for ledger math)
+  // Display-only monthly interest (do NOT use this for ledger math)
   const effectiveMonthlyInterest = useMemo(() => {
     if (!record) return 0;
     const pct = n(safeLoan.monthlyPct || 0);
@@ -320,8 +372,67 @@ export default function CustomerDetailsPage() {
   };
 
   const handleCancelPayment = () => setShowPaymentModal(false);
+  const handleOpenCloseModal = () => {
+    setCloseError('');
+    const today = todayIso();
+    setCloseDate(today);
+    setCloseNote('');
+    setCloseConfirmPrincipal(false);
+    setCloseConfirmInterest(false);
+    setShowCloseModal(true);
+  };
+  const handleCancelClose = () => setShowCloseModal(false);
 
-  // ✅ Save payment to BACKEND
+  const handleOpenEditModal = () => {
+    if (!record) return;
+    setEditError('');
+    setEditName(record.customer.name || '');
+    setEditAddress(record.customer.address || '');
+    setEditArea(record.customer.area || '');
+    setEditRelative(record.customer.relative || '');
+    setEditPhone(record.customer.phone || '');
+    setEditPhone2(record.customer.phone2 || '');
+    setEditAadhar(record.customer.aadhar || '');
+    setEditDob(record.customer.dob || '');
+    setShowEditModal(true);
+  };
+
+  const handleCancelEdit = () => setShowEditModal(false);
+
+  const handleSaveEdit = async () => {
+    if (!record) return;
+    setEditError('');
+    setEditSaving(true);
+    try {
+      const body = {
+        customer: {
+          name: editName.trim(),
+          address: editAddress.trim(),
+          area: editArea.trim(),
+          relative: editRelative.trim(),
+          phone: editPhone.trim(),
+          phone2: editPhone2.trim(),
+          aadhar: editAadhar.trim(),
+          dob: editDob.trim(),
+        },
+      };
+      const updated = await apiFetch<CustomerRecord>(`customers/${encodeURIComponent(accNoParam)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setRecord(updated);
+      setShowEditModal(false);
+      await loadHistory();
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || 'Failed to update customer details.';
+      setEditError(msg);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // Save payment to BACKEND
   const handleSavePayment = async () => {
     setPaymentError('');
 
@@ -338,37 +449,87 @@ export default function CustomerDetailsPage() {
     const interestOverride =
       interestOverrideStr.length > 0 ? Math.max(0, Math.trunc(Number(interestOverrideStr) || 0)) : null;
 
-    if ((interestOverride ?? 0) === 0 && principalPaid === 0 && adj === 0) {
-      setPaymentError('Enter Interest amount and/or Principal amount (Adjustment optional).');
+    if ((interestOverride ?? 0) === 0 && adj === 0 && principalPaid === 0) {
+      setPaymentError('Enter Interest amount, Principal amount, or Adjustment.');
       return;
     }
 
     setSaving(true);
     try {
-      const body: any = {
-        fromDate,
-        toDate,
-        adjustment: adj,
-        principal: principalPaid,
-        note: paymentNote?.trim() ? paymentNote.trim() : null,
-      };
+      if ((interestOverride ?? 0) > 0 || adj !== 0) {
+        const body: any = {
+          fromDate,
+          toDate,
+          adjustment: adj,
+          note: paymentNote?.trim() ? paymentNote.trim() : null,
+        };
+        if (interestOverride !== null) body.interestAmount = interestOverride;
 
-      if (interestOverride !== null) body.interestAmount = interestOverride;
+        const updated = await apiFetch<CustomerRecord>(`customers/${encodeURIComponent(accNoParam)}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        setRecord(updated);
+        const loanAmountFallback = n(updated.loan?.loanAmount ?? 0);
+        setPayments(mapBackendPaymentsToUi(updated, loanAmountFallback));
+      }
 
-      const updated = await apiFetch<CustomerRecord>(`customers/${encodeURIComponent(accNoParam)}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      if (principalPaid > 0) {
+        await apiFetch(`customers/${encodeURIComponent(accNoParam)}/close`, {
+          method: 'POST',
+          body: JSON.stringify({
+            date: toDate,
+            mode: 'PARTIAL',
+            principalAmount: principalPaid,
+            note: paymentNote?.trim() ? paymentNote.trim() : null,
+          }),
+        });
+        const refreshed = await apiFetch<CustomerRecord>(`customers/${encodeURIComponent(accNoParam)}`);
+        setRecord(refreshed);
+        const loanAmountFallback = n(refreshed.loan?.loanAmount ?? 0);
+        setPayments(mapBackendPaymentsToUi(refreshed, loanAmountFallback));
+      }
 
-      setRecord(updated);
-      const loanAmountFallback = n(updated.loan?.loanAmount ?? 0);
-      setPayments(mapBackendPaymentsToUi(updated, loanAmountFallback));
+      await loadHistory();
       setShowPaymentModal(false);
     } catch (e: any) {
       setPaymentError(e?.message || 'Failed to save payment.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCloseLoan = async () => {
+    setCloseError('');
+    if (!record) return setCloseError('Customer details not loaded.');
+    if (!closeConfirmPrincipal || !closeConfirmInterest) {
+      return setCloseError('Confirm full principal and interest paid to close the loan.');
+    }
+    if (effectivePrincipal > 0 || pendingInterest > 0) {
+      return setCloseError('Please clear full principal and interest before closing.');
+    }
+    setCloseSaving(true);
+    try {
+      await apiFetch(`customers/${encodeURIComponent(accNoParam)}/close`, {
+        method: 'POST',
+        body: JSON.stringify({
+          date: closeDate,
+          mode: 'FULL',
+          principalAmount: Math.trunc(Number(effectivePrincipal) || 0),
+          note: closeNote?.trim() ? closeNote.trim() : null,
+        }),
+      });
+      const refreshed = await apiFetch<CustomerRecord>(`customers/${encodeURIComponent(accNoParam)}`);
+      setRecord(refreshed);
+      const loanAmountFallback = n(refreshed.loan?.loanAmount ?? 0);
+      setPayments(mapBackendPaymentsToUi(refreshed, loanAmountFallback));
+      await loadHistory();
+      setShowCloseModal(false);
+    } catch (e: any) {
+      setCloseError(e?.message || 'Failed to close loan.');
+    } finally {
+      setCloseSaving(false);
     }
   };
 
@@ -388,15 +549,15 @@ export default function CustomerDetailsPage() {
             cursor: 'pointer',
           }}
         >
-          ← Back to Search
+          {'\u2190 Back to Search'}
         </button>
       </div>
 
       <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-        CustomerDetails – backend-ledger (Interest + Principal columns)
+        CustomerDetails - backend-ledger (Interest + Principal columns)
       </div>
 
-      {loading && <div style={{ fontSize: 14, color: '#6b7280' }}>Loading customer details…</div>}
+      {loading && <div style={{ fontSize: 14, color: '#6b7280' }}>Loading customer details...</div>}
 
       {error && !loading && (
         <div style={{ ...card, borderColor: '#fecaca', background: '#fef2f2', color: '#b91c1c' }}>{error}</div>
@@ -404,8 +565,27 @@ export default function CustomerDetailsPage() {
 
       {!loading && !error && record && (
         <>
-          {/* ✅ Customer History (Updated fields) */}
+          {/* Customer Summary */}
           <section style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={sectionTitle}>Customer Details</div>
+              <button
+                type="button"
+                onClick={handleOpenEditModal}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: '1px solid #111827',
+                  background: '#ffffff',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Edit Details
+              </button>
+            </div>
+
             <div style={gridTwo}>
               <div>
                 <div style={label}>Customer Name</div>
@@ -418,18 +598,48 @@ export default function CustomerDetailsPage() {
               </div>
 
               <div>
-                <div style={label}>Outstanding principal</div>
-                <div style={value}>₹ {fmtCurrency(effectivePrincipal)}</div>
+                <div style={label}>Phone</div>
+                <div style={value}>{record.customer.phone || '-'}</div>
               </div>
 
               <div>
-                <div style={label}>Phone number</div>
-                <div style={value}>{record.customer.phone || '-'}</div>
+                <div style={label}>Phone 2</div>
+                <div style={value}>{record.customer.phone2 || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Address</div>
+                <div style={value}>{record.customer.address || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Area</div>
+                <div style={value}>{record.customer.area || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Relative</div>
+                <div style={value}>{record.customer.relative || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Aadhar</div>
+                <div style={value}>{record.customer.aadhar || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>DOB</div>
+                <div style={value}>{record.customer.dob || '-'}</div>
+              </div>
+
+              <div>
+                <div style={label}>Outstanding principal</div>
+                <div style={value}>₹ {fmtCurrency(effectivePrincipal)}</div>
               </div>
             </div>
           </section>
 
-          {/* ✅ Loan Details (Updated fields) */}
+          {/* Loan Details */}
           <section style={card}>
             <div style={sectionTitle}>Loan Details</div>
 
@@ -508,24 +718,44 @@ export default function CustomerDetailsPage() {
           <section style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={sectionTitle}>Payment History</div>
-              <button
-                type="button"
-                onClick={handleOpenPaymentModal}
-                disabled={record.status === 'CLOSED'}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: 999,
-                  border: 'none',
-                  background: '#111827',
-                  color: '#ffffff',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: record.status === 'CLOSED' ? 'not-allowed' : 'pointer',
-                  opacity: record.status === 'CLOSED' ? 0.6 : 1,
-                }}
-              >
-                {record.status === 'CLOSED' ? 'Loan Closed' : 'Make Payment'}
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={handleOpenPaymentModal}
+                  disabled={record.status === 'CLOSED'}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 999,
+                    border: 'none',
+                    background: '#111827',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: record.status === 'CLOSED' ? 'not-allowed' : 'pointer',
+                    opacity: record.status === 'CLOSED' ? 0.6 : 1,
+                  }}
+                >
+                  {record.status === 'CLOSED' ? 'Loan Closed' : 'Make Payment'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenCloseModal}
+                  disabled={record.status === 'CLOSED'}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 999,
+                    border: '1px solid #111827',
+                    background: '#ffffff',
+                    color: '#111827',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: record.status === 'CLOSED' ? 'not-allowed' : 'pointer',
+                    opacity: record.status === 'CLOSED' ? 0.6 : 1,
+                  }}
+                >
+                  Close Loan
+                </button>
+              </div>
             </div>
 
             {payments.length === 0 ? (
@@ -602,12 +832,199 @@ export default function CustomerDetailsPage() {
                 </table>
 
                 <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
-                  ✅ This history is read-only and comes from backend. UI doesn’t do any interest calculations.
+                  Note: This history is read-only and comes from backend. UI doesn't do any interest calculations.
                 </div>
               </div>
             )}
           </section>
+
+          <section style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={sectionTitle}>Change History</div>
+              <button
+                type="button"
+                onClick={loadHistory}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                disabled={historyLoading}
+              >
+                {historyLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {historyLoading && <div style={{ fontSize: 13, color: '#6b7280' }}>Loading history...</div>}
+
+            {!historyLoading && historyError && (
+              <div style={{ fontSize: 13, color: '#b91c1c' }}>{historyError}</div>
+            )}
+
+            {!historyLoading && !historyError && historyRows.length === 0 && (
+              <div style={{ fontSize: 13, color: '#6b7280' }}>No history records yet.</div>
+            )}
+
+            {!historyLoading && !historyError && historyRows.length > 0 && (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Date</th>
+                      <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Action</th>
+                      <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Summary</th>
+                      <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Changed By</th>
+                      <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #e5e7eb' }}>Data</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRows.map((row, idx) => (
+                      <tr key={row.id ?? `${row.createdAt}-${idx}`}>
+                        <td style={{ padding: 8, borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                          {fmtDateForRow(row.createdAt)}
+                        </td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{row.action}</td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #f3f4f6', maxWidth: 300 }}>
+                          {row.summary}
+                        </td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{row.changedBy || '-'}</td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #f3f4f6', maxWidth: 320 }}>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12 }}>
+                            {row.data ? JSON.stringify(row.data, null, 2) : ''}
+                          </pre>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </>
+      )}
+
+      {/* Edit customer modal */}
+      {showEditModal && record && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 640,
+              background: '#ffffff',
+              borderRadius: 20,
+              boxShadow: '0 20px 25px -5px rgba(15,23,42,0.3)',
+              padding: 20,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Edit Customer Details</div>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Name</div>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Phone</div>
+                <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Phone 2</div>
+                <input value={editPhone2} onChange={(e) => setEditPhone2(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Relative</div>
+                <input value={editRelative} onChange={(e) => setEditRelative(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Address</div>
+                <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Area</div>
+                <input value={editArea} onChange={(e) => setEditArea(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Aadhar</div>
+                <input value={editAadhar} onChange={(e) => setEditAadhar(e.target.value)} style={inputCss} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>DOB</div>
+                <input
+                  value={editDob}
+                  onChange={(e) => setEditDob(e.target.value)}
+                  style={inputCss}
+                  placeholder="DD-MM-YYYY"
+                />
+              </div>
+            </div>
+
+            {editError && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 12 }}>{editError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  cursor: 'pointer',
+                }}
+                disabled={editSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: 'none',
+                  background: '#111827',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  opacity: editSaving ? 0.7 : 1,
+                }}
+                disabled={editSaving}
+              >
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Payment modal */}
@@ -634,32 +1051,51 @@ export default function CustomerDetailsPage() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>Record Payment</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Record Interest Payment</div>
               <button
                 type="button"
                 onClick={handleCancelPayment}
-                style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer' }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                }}
+                aria-label="Close"
               >
                 ×
               </button>
             </div>
 
-            <div style={{ fontSize: 13, marginBottom: 12 }}>
-              <div>
-                <strong>Customer:</strong> {record.customer.name}
-              </div>
-              <div>
-                <strong>Acc. No:</strong> {record.accNo}
-              </div>
-              <div>
-                <strong>Outstanding principal:</strong> ₹ {fmtCurrency(effectivePrincipal)}
-              </div>
-              <div>
-                <strong>Pending Interest:</strong> ₹ {fmtCurrency(pendingInterest)}
-              </div>
-              <div>
-                <strong>Interest / month (display only):</strong> ₹ {fmtCurrency(effectiveMonthlyInterest)}
-              </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {[
+                { label: 'Customer', value: record.customer.name },
+                { label: 'Acc. No', value: record.accNo },
+                { label: 'Outstanding principal', value: `₹ ${fmtCurrency(effectivePrincipal)}` },
+                { label: 'Pending Interest', value: `₹ ${fmtCurrency(pendingInterest)}` },
+                { label: 'Interest / month (display)', value: `₹ ${fmtCurrency(effectiveMonthlyInterest)}` },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    background: '#f9fafb',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 700 }}>{item.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{item.value}</div>
+                </div>
+              ))}
             </div>
 
             {/* From / Upto */}
@@ -705,7 +1141,7 @@ export default function CustomerDetailsPage() {
                 placeholder="0"
               />
               <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                Example: If calculated interest is ₹1,923 but received ₹1,900 → enter <b>-23</b>. If received ₹2,000 →
+                Example: If calculated interest is ₹1,923 but received ₹1,900 -> enter <b>-23</b>. If received ₹2,000 ->
                 enter <b>+77</b>.
               </div>
             </div>
@@ -720,6 +1156,9 @@ export default function CustomerDetailsPage() {
                 style={inputCss}
                 placeholder="0"
               />
+              <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
+                Principal payments are recorded via Close Loan (Partial) under the hood.
+              </div>
             </div>
 
             {/* Note */}
@@ -730,7 +1169,7 @@ export default function CustomerDetailsPage() {
                 value={paymentNote}
                 onChange={(e) => setPaymentNote(e.target.value)}
                 style={inputCss}
-                placeholder="UPI ref / Cash / remarks…"
+                placeholder="UPI ref / Cash / remarks..."
               />
             </div>
 
@@ -766,7 +1205,152 @@ export default function CustomerDetailsPage() {
                 }}
                 disabled={saving}
               >
-                {saving ? 'Saving…' : 'Save Payment'}
+                {saving ? 'Saving...' : 'Save Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close loan modal */}
+      {showCloseModal && record && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 520,
+              background: '#ffffff',
+              borderRadius: 20,
+              boxShadow: '0 20px 25px -5px rgba(15,23,42,0.3)',
+              padding: 20,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Close Loan</div>
+              <button
+                type="button"
+                onClick={handleCancelClose}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {[
+                { label: 'Customer', value: record.customer.name },
+                { label: 'Acc. No', value: record.accNo },
+                { label: 'Outstanding principal', value: `₹ ${fmtCurrency(effectivePrincipal)}` },
+                { label: 'Pending Interest', value: `₹ ${fmtCurrency(pendingInterest)}` },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    background: '#f9fafb',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 700 }}>{item.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Close date</div>
+                <input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} style={inputCss} />
+              </div>
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={closeConfirmPrincipal}
+                onChange={(e) => setCloseConfirmPrincipal(e.target.checked)}
+              />
+              <span style={{ fontSize: 13 }}>I confirm full principal is paid.</span>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+              <input
+                type="checkbox"
+                checked={closeConfirmInterest}
+                onChange={(e) => setCloseConfirmInterest(e.target.checked)}
+              />
+              <span style={{ fontSize: 13 }}>I confirm all pending interest is paid.</span>
+            </label>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Note (optional)</div>
+              <input
+                type="text"
+                value={closeNote}
+                onChange={(e) => setCloseNote(e.target.value)}
+                style={inputCss}
+                placeholder="Reason / remarks"
+              />
+            </div>
+
+            {closeError && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 12 }}>{closeError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={handleCancelClose}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: '1px solid #d1d5db',
+                  background: '#ffffff',
+                  cursor: 'pointer',
+                }}
+                disabled={closeSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseLoan}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: 'none',
+                  background: '#111827',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  opacity: closeSaving ? 0.7 : 1,
+                }}
+                disabled={closeSaving}
+              >
+                {closeSaving ? 'Closing…' : 'Close Loan'}
               </button>
             </div>
           </div>
@@ -775,7 +1359,6 @@ export default function CustomerDetailsPage() {
     </main>
   );
 }
-
 
 
 
