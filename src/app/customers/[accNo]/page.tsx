@@ -569,21 +569,39 @@ export default function CustomerDetailsPage() {
           <section style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={sectionTitle}>Customer Details</div>
-              <button
-                type="button"
-                onClick={handleOpenEditModal}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 999,
-                  border: '1px solid #111827',
-                  background: '#ffffff',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Edit Details
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleOpenEditModal}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    border: '1px solid #111827',
+                    background: '#ffffff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/customers/${encodeURIComponent(accNoParam)}/new-loan`)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    border: 'none',
+                    background: '#111827',
+                    color: '#ffffff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Create New Loan
+                </button>
+              </div>
             </div>
 
             <div style={gridTwo}>
@@ -1359,7 +1377,6 @@ export default function CustomerDetailsPage() {
     </main>
   );
 }
-
 
 
 
